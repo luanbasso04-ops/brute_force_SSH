@@ -1,16 +1,16 @@
-# SSH Brute-Force Detection Engineering Lab with Splunk
+# Laboratório de Engenharia de Deteção de Brute Force SSH com Splunk
 
-## Overview
+## Visão Geral
 
-This project demonstrates a complete SOC detection workflow for SSH brute-force activity using Splunk.
+Este projeto demonstra um fluxo completo de deteção em ambiente SOC para atividade de brute force SSH utilizando Splunk.
 
-The lab includes service discovery with Nmap, controlled SSH brute-force simulation with Metasploit, log ingestion into Splunk, SPL-based detection logic, alert configuration, and evidence collection.
+O laboratório inclui descoberta de serviço com Nmap, simulação controlada de brute force SSH com Metasploit, ingestão de logs no Splunk, criação de lógica de deteção com SPL, configuração de alerta e recolha de evidências.
 
-## Objective
+## Objetivo
 
-The objective of this lab was to detect repeated failed SSH login attempts and generate an alert when brute-force behavior was observed.
+O objetivo deste laboratório foi detetar tentativas repetidas de login SSH falhado e gerar um alerta quando fosse observado comportamento compatível com brute force.
 
-## Lab Environment
+## Ambiente de Laboratório
 
 - Kali Linux
 - Splunk Enterprise 9.3.1
@@ -18,125 +18,156 @@ The objective of this lab was to detect repeated failed SSH login attempts and g
 - Nmap
 - Metasploit Framework
 - SPL
-- Windows host used for external SSH testing
+- Host Windows utilizado para teste externo de SSH
 
-## Lab Scope
+## Âmbito do Laboratório
 
-This lab was performed in a controlled local environment.
+Este laboratório foi realizado num ambiente local e controlado.
 
-The target host was my own Kali Linux machine running OpenSSH and Splunk. Nmap and Metasploit were used only against my own lab machine for learning and detection engineering purposes.
+O alvo utilizado foi a minha própria máquina Kali Linux, com OpenSSH e Splunk em execução. O Nmap e o Metasploit foram utilizados apenas contra a minha própria máquina de laboratório, com finalidade educativa e de engenharia de deteção.
 
-## Methodology
+## Metodologia
 
-1. Used Nmap to confirm that SSH was exposed on port 22.
-2. Used Metasploit to generate controlled failed SSH login attempts.
-3. Ingested SSH authentication logs into Splunk.
-4. Extracted source IP and username fields using SPL.
-5. Created a detection query for repeated failed SSH login attempts.
-6. Configured a scheduled high-severity alert.
-7. Validated the alert in Splunk Triggered Alerts.
-8. Exported evidence and screenshots for documentation.
+1. Utilização do Nmap para confirmar que o serviço SSH estava exposto na porta 22.
+2. Utilização do Metasploit para gerar tentativas controladas de login SSH falhado.
+3. Ingestão dos logs de autenticação SSH no Splunk.
+4. Extração dos campos de IP de origem e utilizador através de SPL.
+5. Criação de uma query de deteção para tentativas repetidas de login SSH falhado.
+6. Configuração de um alerta agendado com severidade alta.
+7. Validação do alerta na secção Triggered Alerts do Splunk.
+8. Exportação de evidências e screenshots para documentação.
 
-## Service Discovery
+## Descoberta de Serviço
 
-Nmap was used to validate that the target host had SSH exposed on port 22.
+O Nmap foi utilizado para validar que o host alvo tinha o serviço SSH exposto na porta 22.
 
 ```bash
-nmap -sV -p 22 192.168.1.4 -oN evidence/nmap_ssh_service_scan.txt  
+nmap -sV -p 22 192.168.1.4 -oN evidence/nmap_ssh_service_scan.txt
+```
 
-Result:
+### Resultado
 
-22/tcp open ssh OpenSSH 10.2p1 Debian 6
-Attack Simulation
+```text
+22/tcp open  ssh  OpenSSH 10.2p1 Debian 6
+```
 
-Metasploit was used in a controlled local lab to generate SSH failed login attempts against my own SSH service.
+## Simulação do Brute Force
 
-Module used:
+O Metasploit foi utilizado num laboratório local controlado para gerar tentativas falhadas de login SSH contra o meu próprio serviço SSH.
 
+### Módulo utilizado
+
+```text
 auxiliary/scanner/ssh/ssh_login
+```
 
-The purpose of this step was not exploitation. The goal was to generate authentication failure logs that could be ingested and detected by Splunk.
+O objetivo desta etapa não foi exploração. A finalidade foi gerar logs de falha de autenticação que pudessem ser ingeridos e detetados pelo Splunk.
 
-Data Source
+## Fonte de Dados
 
-Splunk monitored the following SSH log file:
+O Splunk monitorizou o seguinte ficheiro de log SSH:
 
+```text
 /var/log/ssh_bruteforce.log
+```
 
-Custom sourcetype:
+### Sourcetype personalizado
 
+```text
 ssh_Bruteforce
+```
 
-Detection Query
+## Query de Deteção
+
+```spl
 index=main sourcetype=ssh_Bruteforce "Failed password"
 | rex "Failed password for (invalid user )?(?<user>\S+) from (?<src_ip>\S+)"
 | stats count as failed_attempts earliest(_time) as first_attempt latest(_time) as last_attempt by src_ip, user
 | where failed_attempts >= 5
 | convert ctime(first_attempt) ctime(last_attempt)
 | sort -failed_attempts
-Detection Logic
+```
 
-The detection identifies possible SSH brute-force activity by:
+## Lógica de Deteção
 
-Searching for failed SSH login attempts
-Extracting the source IP address
-Extracting the targeted username
-Counting failed attempts by source IP and username
-Triggering detection when failed attempts are greater than or equal to 5
-Alert Configuration
-Alert name: SSH BRUTE FORCE DETECTION
-Alert type: Scheduled
-Schedule: Every 5 minutes
-Trigger condition: Number of results greater than 0
-Severity: High
-Action: Add to Triggered Alerts
-Throttling enabled to reduce repeated alerts
-Results
+A deteção identifica possível atividade de brute force SSH através dos seguintes passos:
 
-The detection successfully identified multiple failed SSH login attempts.
+- Pesquisa por tentativas falhadas de login SSH.
+- Extração do endereço IP de origem.
+- Extração do nome de utilizador alvo.
+- Contagem de tentativas falhadas por IP de origem e utilizador.
+- Geração de deteção quando o número de tentativas falhadas é maior ou igual a 5.
 
-Example results:
+## Configuração do Alerta
 
-Source IP	User	Failed Attempts
-127.0.0.1	admin	12
-192.168.1.2	teste	6
-192.168.1.4	admin	7
+| Campo | Valor |
+|---|---|
+| Nome do alerta | SSH BRUTE FORCE DETECTION |
+| Tipo de alerta | Scheduled |
+| Agendamento | A cada 5 minutos |
+| Condição de disparo | Número de resultados maior que 0 |
+| Severidade | High |
+| Ação | Add to Triggered Alerts |
+| Throttling | Ativado para reduzir alertas repetidos |
 
-MITRE ATT&CK Mapping
-T1110 - Brute Force
-T1110.001 - Password Guessing
+## Resultados
 
-Evidence
-Screenshots
+A deteção identificou com sucesso múltiplas tentativas falhadas de login SSH.
+
+### Exemplo de resultados
+
+| IP de Origem | Utilizador | Tentativas Falhadas |
+|---|---|---|
+| 127.0.0.1 | admin | 12 |
+| 192.168.1.2 | teste | 6 |
+| 192.168.1.4 | admin | 7 |
+
+## Mapeamento MITRE ATT&CK
+
+| Técnica | Descrição |
+|---|---|
+| T1110 | Brute Force |
+| T1110.001 | Password Guessing |
+
+## Evidências
+
+### Screenshots
+
+```text
 01_nmap_ssh_service_scan.png
 02_raw_ssh_logs_ingested.png
 03_bruteforce_detection_result.png
 04_alert_configuration.png
 05_triggered_alerts.png
 06_metasploit_detection_result.png
+```
 
-Exported Evidence
+### Evidências Exportadas
 
+```text
 nmap_ssh_service_scan.txt
 bruteforce_detection_results.csv
 metasploit_bruteforce_detection_results.csv
 raw_ssh_failed_login_events_1.txt
 raw_ssh_failed_login_events_2.txt
+```
 
-Skills Demonstrated
+## Competências Demonstradas
 
-Service discovery with Nmap
-Controlled attack simulation with Metasploit
-Splunk log ingestion
-SPL query writing
-Field extraction using rex
-SSH brute-force detection logic
-Alert creation and validation
-Alert severity configuration
-Basic SOC detection engineering workflow
-MITRE ATT&CK mapping
+- Descoberta de serviço com Nmap.
+- Simulação controlada com Metasploit.
+- Ingestão de logs no Splunk.
+- Criação de queries SPL.
+- Extração de campos com `rex`.
+- Lógica de deteção de brute force SSH.
+- Criação e validação de alertas.
+- Configuração de severidade de alerta.
+- Fluxo básico de trabalho em ambiente SOC.
+- Mapeamento com MITRE ATT&CK.
 
-Project Structure
+## Estrutura do Projeto
+
+```text
 .
 ├── evidence
 │   ├── bruteforce_detection_results.csv
@@ -156,8 +187,14 @@ Project Structure
 └── wordlists
     ├── passwords.txt
     └── users.txt
-Conclusion
+```
 
-This lab demonstrates a practical detection engineering workflow for SSH brute-force activity.
+## Conclusão
 
-The project covers service discovery, controlled attack simulation, log ingestion, SPL detection logic, alert configuration, and validation through triggered alerts in Splunk.
+Este laboratório demonstra um fluxo prático de engenharia de deteção para atividade de brute force SSH.
+
+O projeto cobre descoberta de serviço, simulação controlada, ingestão de logs, criação de lógica de deteção com SPL, configuração de alerta e validação através dos alertas disparados no Splunk.
+
+## Aviso Legal
+
+Este projeto foi realizado exclusivamente em ambiente laboratorial, local e controlado, para fins educativos e defensivos. Nenhum sistema real, rede pública ou ambiente de produção foi afetado.
