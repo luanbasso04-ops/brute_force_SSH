@@ -1,0 +1,6 @@
+index=main sourcetype=ssh_Bruteforce "Failed password"
+| rex "Failed password for (invalid user )?(?<user>\S+) from (?<src_ip>\S+)"
+| stats count as failed_attempts earliest(_time) as first_attempt latest(_time) as last_attempt by src_ip, user
+| where failed_attempts >= 5
+| convert ctime(first_attempt) ctime(last_attempt)
+| sort -failed_attempts
